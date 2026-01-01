@@ -1,0 +1,7 @@
+{
+  "name": "PlantReview AI",
+  "description": "An AI-powered plant review application that transforms plant photos into cinematic video reviews with realistic AI voices and zoom effects.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}
