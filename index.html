@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>PlantReview AI</title>
+    <title>PlantReview AI - Real</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
@@ -13,7 +13,8 @@
       "imports": {
         "react": "https://esm.sh/react@18.2.0",
         "react-dom/client": "https://esm.sh/react-dom@18.2.0/client",
-        "lucide-react": "https://esm.sh/lucide-react@0.263.1"
+        "lucide-react": "https://esm.sh/lucide-react@0.263.1",
+        "@google/generative-ai": "https://esm.sh/@google/generative-ai"
       }
     }
     </script>
@@ -30,7 +31,11 @@
     <script type="text/babel" data-type="module">
         import React, { useState } from 'react';
         import ReactDOM from 'react-dom/client';
-        import { Leaf, Sparkles, Loader2, Play, CheckCircle, ChevronRight, Share2, Download, Video, History, Plus, Trash2, Image as ImageIcon, Upload, X } from 'lucide-react';
+        import { Leaf, Sparkles, Loader2, Play, ChevronRight, Download, Video, History, Upload, X, Key, CheckCircle } from 'lucide-react';
+        import { GoogleGenerativeAI } from "@google/generative-ai";
+
+        // --- CẤU HÌNH KEY CỦA BẠN TẠI ĐÂY ---
+        const MY_API_KEY = "AIzaSyBeJvLC_0-VXXpHK9wZ35BlyQy0mp46vFc";
 
         const STYLES = [
             { id: 'educational', label: 'Kiến thức', desc: 'Sâu sắc, tỉ mỉ' },
@@ -43,181 +48,171 @@
             const [step, setStep] = useState(1);
             const [selectedStyle, setSelectedStyle] = useState('educational');
             const [isProcessing, setIsProcessing] = useState(false);
-            const [scenes, setScenes] = useState([{ id: 1, text: '', image: null }]); // image giờ lưu URL blob
+            const [scenes, setScenes] = useState([{ id: 1, text: '', image: null, file: null, aiResult: '' }]);
 
-            const addScene = () => setScenes([...scenes, { id: Date.now(), text: '', image: null }]);
-            
-            const removeScene = (id) => {
-                setScenes(scenes.filter(s => s.id !== id));
-            };
-
-            const updateSceneText = (id, text) => {
-                setScenes(scenes.map(s => s.id === id ? { ...s, text } : s));
-            };
-
-            // --- XỬ LÝ UPLOAD ẢNH (TẠO URL TẠM THỜI) ---
+            // --- XỬ LÝ ẢNH ---
             const handleImageUpload = (id, event) => {
                 const file = event.target.files[0];
                 if (file) {
                     const imageUrl = URL.createObjectURL(file);
-                    setScenes(scenes.map(s => s.id === id ? { ...s, image: imageUrl } : s));
+                    setScenes(scenes.map(s => s.id === id ? { ...s, image: imageUrl, file: file } : s));
                 }
             };
 
             const removeImage = (id) => {
-                setScenes(scenes.map(s => s.id === id ? { ...s, image: null } : s));
+                setScenes(scenes.map(s => s.id === id ? { ...s, image: null, file: null } : s));
             };
 
-            const handleProcess = () => {
-                if (!scenes[0].text && !scenes[0].image) {
-                    alert("Vui lòng nhập nội dung hoặc tải ảnh cho cảnh 1!");
+            // --- HÀM GỌI GEMINI AI ---
+            const fileToGenerativePart = async (file) => {
+                const base64EncodedDataPromise = new Promise((resolve) => {
+                    const reader = new FileReader();
+                    reader.onloadend = () => resolve(reader.result.split(',')[1]);
+                    reader.readAsDataURL(file);
+                });
+                return {
+                    inlineData: { data: await base64EncodedDataPromise, mimeType: file.type },
+                };
+            };
+
+            const handleProcess = async () => {
+                if (!scenes[0].image) {
+                    alert("Vui lòng tải ảnh lên trước!");
                     return;
                 }
+
                 setIsProcessing(true);
-                setTimeout(() => {
+                try {
+                    // 1. Dùng Key đã cài sẵn
+                    const genAI = new GoogleGenerativeAI(MY_API_KEY);
+                    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+
+                    // 2. Chuẩn bị dữ liệu
+                    const imagePart = await fileToGenerativePart(scenes[0].file);
+                    const styleLabel = STYLES.find(s => s.id === selectedStyle)?.label;
+                    
+                    // Câu lệnh nhắc (Prompt)
+                    const prompt = `Bạn là chuyên gia cây cảnh và nội dung số. Hãy xem ảnh này và viết một kịch bản lời bình (review) ngắn gọn để làm video TikTok/Reels.
+                    - Phong cách: ${styleLabel}.
+                    - Ghi chú từ người dùng: "${scenes[0].text}".
+                    - Yêu cầu: Viết tiếng Việt tự nhiên, hấp dẫn, tập trung vào vẻ đẹp hoặc công dụng của cây. Không cần mô tả cảnh quay, chỉ cần lời bình.`;
+
+                    // 3. Gọi AI
+                    const result = await model.generateContent([prompt, imagePart]);
+                    const response = await result.response;
+                    const text = response.text();
+
+                    // 4. Cập nhật kết quả
+                    setScenes(scenes.map((s, i) => i === 0 ? { ...s, aiResult: text } : s));
+                    setStep(2); 
+
+                } catch (error) {
+                    console.error(error);
+                    alert("Lỗi: " + error.message + ". Có thể Key bị sai hoặc hết hạn mức.");
+                } finally {
                     setIsProcessing(false);
-                    setStep(2);
-                }, 2000);
+                }
+            };
+
+            // --- TẢI KẾT QUẢ ---
+            const handleDownload = () => {
+                const content = scenes[0].aiResult;
+                const element = document.createElement("a");
+                const file = new Blob([content], {type: 'text/plain'});
+                element.href = URL.createObjectURL(file);
+                element.download = "Review_Cay_Canh.txt";
+                document.body.appendChild(element);
+                element.click();
             };
 
             // --- GIAO DIỆN BƯỚC 1 ---
             const renderBuildStep = () => (
-                <div className="space-y-8 animate-in">
-                     <div className="text-center space-y-2">
-                        <h2 className="text-3xl md:text-4xl font-extrabold text-slate-900">Kể chuyện về cây của bạn</h2>
-                        <p className="text-slate-500">Thêm ảnh thực tế và gợi ý kịch bản review chân thực.</p>
+                <div className="space-y-6 animate-in">
+                    <div className="text-center space-y-2">
+                        <h2 className="text-3xl font-extrabold text-slate-900">Kể chuyện về cây</h2>
+                        <p className="text-slate-500">Đã kết nối AI. Tải ảnh lên để tạo nội dung ngay.</p>
                     </div>
 
-                    <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
-                        <h3 className="font-semibold text-slate-800 mb-4 flex items-center gap-2">
-                            <Sparkles size={18} className="text-green-500" />
-                            Chọn phong cách review
-                        </h3>
-                        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                            {STYLES.map(style => (
-                                <button
-                                    key={style.id}
-                                    onClick={() => setSelectedStyle(style.id)}
-                                    className={`p-3 rounded-xl border-2 transition-all text-center ${
-                                        selectedStyle === style.id 
-                                        ? 'border-green-600 bg-green-50 shadow-inner' 
-                                        : 'border-slate-100 hover:border-slate-200 bg-slate-50/50'
-                                    }`}
-                                >
-                                    <div className={`text-sm font-bold mb-0.5 ${selectedStyle === style.id ? 'text-green-700' : 'text-slate-600'}`}>
-                                        {style.label}
+                    {/* Chọn phong cách */}
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                        {STYLES.map(style => (
+                            <button
+                                key={style.id}
+                                onClick={() => setSelectedStyle(style.id)}
+                                className={`p-2 rounded-lg border transition-all ${selectedStyle === style.id ? 'bg-green-100 border-green-500 text-green-800 shadow-sm' : 'bg-white border-slate-200 hover:bg-slate-50'}`}
+                            >
+                                <div className="text-sm font-bold">{style.label}</div>
+                                <div className="text-[10px] opacity-70">{style.desc}</div>
+                            </button>
+                        ))}
+                    </div>
+
+                    {/* Khu vực Upload */}
+                    <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col md:flex-row gap-4">
+                        <div className="w-full md:w-48 aspect-square flex-shrink-0">
+                            {scenes[0].image ? (
+                                <div className="w-full h-full relative rounded-lg overflow-hidden border group">
+                                    <img src={scenes[0].image} className="w-full h-full object-cover" />
+                                    <button onClick={() => removeImage(1)} className="absolute top-1 right-1 bg-black/50 text-white p-1 rounded-full hover:bg-red-500 transition"><X size={14}/></button>
+                                </div>
+                            ) : (
+                                <label className="w-full h-full bg-slate-50 border-2 border-dashed border-slate-300 rounded-lg flex flex-col items-center justify-center cursor-pointer hover:bg-green-50 hover:border-green-500 transition group">
+                                    <div className="w-10 h-10 bg-white rounded-full flex items-center justify-center shadow-sm mb-2 group-hover:scale-110 transition">
+                                        <Upload className="text-green-600" size={20}/>
                                     </div>
-                                    <div className="text-[10px] text-slate-400">{style.desc}</div>
-                                </button>
-                            ))}
+                                    <span className="text-xs font-bold text-slate-500">Tải ảnh lên</span>
+                                    <input type="file" accept="image/*" className="hidden" onChange={(e) => handleImageUpload(1, e)} />
+                                </label>
+                            )}
+                        </div>
+                        <div className="flex-1">
+                            <textarea 
+                                placeholder="Ghi chú thêm cho AI (Ví dụ: Cây này tên là Trầu Bà, muốn giọng văn hài hước...)"
+                                className="w-full h-full min-h-[150px] p-3 text-sm border border-slate-200 rounded-lg focus:ring-1 focus:ring-green-500 outline-none resize-none bg-slate-50 focus:bg-white transition"
+                                value={scenes[0].text}
+                                onChange={(e) => setScenes([{...scenes[0], text: e.target.value}])}
+                            ></textarea>
                         </div>
                     </div>
 
-                    <div className="space-y-4">
-                        <h3 className="font-semibold text-slate-800 flex items-center gap-2 ml-1">
-                            <Video size={18} className="text-green-500" />
-                            Thiết kế từng phân cảnh
-                        </h3>
-                        
-                        {scenes.map((scene, index) => (
-                            <div key={scene.id} className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm relative group animate-in">
-                                <div className="flex justify-between items-center mb-3">
-                                    <span className="text-xs font-bold text-slate-400 uppercase">PHÂN CẢNH {index + 1}</span>
-                                    {scenes.length > 1 && (
-                                        <button onClick={() => removeScene(scene.id)} className="text-slate-300 hover:text-red-500 transition">
-                                            <Trash2 size={16} />
-                                        </button>
-                                    )}
-                                </div>
-                                <div className="flex flex-col md:flex-row gap-4">
-                                    
-                                    {/* --- KHU VỰC UPLOAD ẢNH (ĐÃ SỬA) --- */}
-                                    <div className="w-full md:w-40 aspect-square flex-shrink-0">
-                                        {scene.image ? (
-                                            <div className="w-full h-full relative rounded-lg overflow-hidden border border-slate-200 group/img">
-                                                <img src={scene.image} className="w-full h-full object-cover" />
-                                                <button 
-                                                    onClick={() => removeImage(scene.id)}
-                                                    className="absolute top-1 right-1 bg-black/50 text-white p-1 rounded-full hover:bg-red-500 transition"
-                                                >
-                                                    <X size={14} />
-                                                </button>
-                                            </div>
-                                        ) : (
-                                            <label className="w-full h-full bg-slate-50 rounded-lg border-2 border-dashed border-slate-300 flex flex-col items-center justify-center cursor-pointer hover:border-green-500 hover:bg-green-50 transition-colors">
-                                                <div className="w-10 h-10 bg-white rounded-full flex items-center justify-center shadow-sm mb-2 text-green-600">
-                                                    <Upload size={20} />
-                                                </div>
-                                                <span className="text-[10px] font-bold text-slate-500">Tải ảnh lên</span>
-                                                <span className="text-[9px] text-slate-400 mt-1">PNG, JPG</span>
-                                                <input 
-                                                    type="file" 
-                                                    accept="image/*" 
-                                                    className="hidden" 
-                                                    onChange={(e) => handleImageUpload(scene.id, e)}
-                                                />
-                                            </label>
-                                        )}
-                                    </div>
-                                    
-                                    <div className="flex-1">
-                                        <textarea 
-                                            placeholder="Ví dụ: Giới thiệu về màu lá, nói về việc cây mới mua về rất tươi..."
-                                            className="w-full h-full min-h-[120px] p-3 text-sm border border-slate-200 rounded-lg bg-slate-50 focus:bg-white focus:border-green-500 focus:ring-1 focus:ring-green-500 outline-none resize-none"
-                                            value={scene.text}
-                                            onChange={(e) => updateSceneText(scene.id, e.target.value)}
-                                        ></textarea>
-                                    </div>
-                                </div>
-                            </div>
-                        ))}
-
-                        <button onClick={addScene} className="w-full py-3 border-2 border-dashed border-slate-300 rounded-xl text-slate-500 font-bold hover:border-green-500 hover:text-green-600 hover:bg-green-50 transition flex items-center justify-center gap-2">
-                            <Plus size={18} /> Thêm cảnh mới
-                        </button>
-                    </div>
-
-                    <div className="sticky bottom-4 z-10">
-                        <button
-                            onClick={handleProcess}
-                            disabled={isProcessing}
-                            className="w-full py-4 bg-slate-900 text-white rounded-2xl font-bold shadow-xl hover:bg-black disabled:bg-slate-400 transition-all flex items-center justify-center gap-2"
-                        >
-                            {isProcessing ? (
-                                <><Loader2 className="animate-spin" /> AI đang xử lý...</>
-                            ) : (
-                                <><Video /> Tạo Video Review</>
-                            )}
-                        </button>
+                    <button
+                        onClick={handleProcess}
+                        disabled={isProcessing}
+                        className="w-full py-4 bg-slate-900 text-white rounded-xl font-bold hover:bg-black disabled:bg-slate-400 transition flex items-center justify-center gap-2 shadow-lg"
+                    >
+                        {isProcessing ? <><Loader2 className="animate-spin" /> Đang phân tích ảnh...</> : <><Sparkles className="text-yellow-400" fill="currentColor" /> Tạo Review Ngay</>}
+                    </button>
+                    
+                    <div className="flex items-center justify-center gap-1 text-[10px] text-green-600 font-medium">
+                        <CheckCircle size={10} /> Đã tích hợp API Key
                     </div>
                 </div>
             );
 
-            // --- GIAO DIỆN BƯỚC 2: KẾT QUẢ ---
+            // --- GIAO DIỆN BƯỚC 2 ---
             const renderResultStep = () => (
                 <div className="space-y-6 animate-in">
-                    <div className="text-center">
-                        <h2 className="text-3xl font-bold text-slate-900">Video Demo Đã Tạo!</h2>
-                        <p className="text-green-600">Phong cách: {STYLES.find(s => s.id === selectedStyle)?.label}</p>
+                    <h2 className="text-2xl font-bold text-center text-green-700">Kết Quả Từ AI</h2>
+
+                    <div className="bg-white rounded-xl shadow-lg border border-slate-200 overflow-hidden max-w-sm mx-auto">
+                        <div className="aspect-[9/16] relative bg-black">
+                             {scenes[0].image && <img src={scenes[0].image} className="w-full h-full object-cover opacity-70" />}
+                             <div className="absolute inset-0 overflow-y-auto p-6 flex flex-col justify-end bg-gradient-to-t from-black via-black/40 to-transparent">
+                                <div className="bg-black/40 backdrop-blur-sm p-4 rounded-xl border border-white/10">
+                                    <p className="text-white text-sm font-medium leading-relaxed shadow-black drop-shadow-md whitespace-pre-wrap">
+                                        {scenes[0].aiResult}
+                                    </p>
+                                </div>
+                             </div>
+                        </div>
                     </div>
 
-                    <div className="max-w-xs mx-auto aspect-[9/16] bg-black rounded-2xl overflow-hidden relative shadow-2xl group cursor-pointer">
-                        <div className="absolute inset-0 flex items-center justify-center">
-                             <Play size={48} className="text-white opacity-80 group-hover:scale-110 transition-transform" />
-                        </div>
-                        {/* Hiển thị ảnh đầu tiên user đã upload */}
-                        {scenes[0].image && <img src={scenes[0].image} className="w-full h-full object-cover opacity-60" />}
-                        <div className="absolute bottom-4 left-4 right-4 text-center">
-                             <p className="text-white text-sm font-medium drop-shadow-md">"{scenes[0].text || 'Nội dung demo...'}"</p>
-                        </div>
-                    </div>
-
-                    <div className="flex gap-3">
-                        <button onClick={() => setStep(1)} className="flex-1 py-3 border border-slate-300 bg-white rounded-xl font-bold text-slate-700 hover:bg-slate-50 flex items-center justify-center gap-2">
+                    <div className="flex gap-2">
+                        <button onClick={() => setStep(1)} className="flex-1 py-3 border bg-white rounded-xl font-bold text-slate-700 hover:bg-slate-50 flex justify-center gap-2 transition">
                             <History size={18}/> Làm lại
                         </button>
-                        <button onClick={() => alert('Chức năng tải video cần backend!')} className="flex-1 py-3 bg-green-600 text-white rounded-xl font-bold hover:bg-green-700 flex items-center justify-center gap-2 shadow-lg shadow-green-200">
-                            <Download size={18}/> Tải về
+                        <button onClick={handleDownload} className="flex-1 py-3 bg-green-600 text-white rounded-xl font-bold hover:bg-green-700 flex justify-center gap-2 shadow-lg transition">
+                            <Download size={18}/> Lưu Kịch Bản
                         </button>
                     </div>
                 </div>
@@ -225,22 +220,11 @@
 
             return (
                 <div className="min-h-screen pb-20">
-                    <header className="bg-white border-b border-slate-200 sticky top-0 z-20 shadow-sm">
-                        <div className="max-w-4xl mx-auto px-4 h-16 flex items-center justify-between">
-                            <div className="flex items-center gap-2 cursor-pointer" onClick={() => setStep(1)}>
-                                <div className="w-8 h-8 bg-green-600 rounded-lg flex items-center justify-center text-white">
-                                    <Leaf size={18} />
-                                </div>
-                                <h1 className="font-bold text-lg text-slate-900">PlantReview <span className="text-green-600">AI</span></h1>
-                            </div>
-                             <div className="flex items-center gap-2 text-xs font-bold text-slate-400">
-                                <span className={step === 1 ? 'text-green-600' : ''}>1. XÂY DỰNG</span>
-                                <ChevronRight size={12} />
-                                <span className={step === 2 ? 'text-green-600' : ''}>2. XUẤT VIDEO</span>
-                             </div>
+                    <header className="bg-white border-b border-slate-200 sticky top-0 z-20 shadow-sm px-4 h-16 flex items-center justify-between">
+                        <div className="flex items-center gap-2 font-bold text-lg text-slate-900 cursor-pointer" onClick={() => setStep(1)}>
+                            <Leaf className="text-green-600" /> PlantReview AI
                         </div>
                     </header>
-
                     <main className="max-w-4xl mx-auto px-4 py-8">
                         {step === 1 ? renderBuildStep() : renderResultStep()}
                     </main>
