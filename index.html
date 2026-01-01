@@ -1,87 +1,376 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>PlantReview AI</title>
-    
-    <script src="https://cdn.tailwindcss.com"></script>
-    
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-    
-    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+import React, { useState, useEffect, useRef } from 'react';
+import ReactDOM from 'react-dom/client';
+import { Leaf, Sparkles, Loader2, Play, CheckCircle, ChevronRight, Share2, Download, Video, History, Plus, Trash2, Image as ImageIcon } from 'lucide-react';
 
-    <script type="importmap">
-    {
-      "imports": {
-        "react": "https://esm.sh/react@18.2.0",
-        "react-dom/client": "https://esm.sh/react-dom@18.2.0/client",
-        "lucide-react": "https://esm.sh/lucide-react@0.263.1",
-        "@google/genai": "https://esm.sh/@google/genai@0.1.1"
+// --- 1. ĐỊNH NGHĨA CÁC KIỂU DỮ LIỆU & ENUM ---
+const ReviewStyle = {
+  EDUCATIONAL: 'educational',
+  ENTHUSIASTIC: 'enthusiastic',
+  RELAXING: 'relaxing',
+  QUICK: 'quick'
+};
+
+// --- 2. GIẢ LẬP SERVICES (Để App chạy được mà không cần Backend lúc này) ---
+// Sau này bạn sẽ thay thế phần này bằng code gọi API thật
+const analyzePlantAndHints = async (scenes, style) => {
+  return new Promise((resolve) => {
+    setTimeout(() => {
+      resolve({
+        name: "Cây Mẫu Minh Họa",
+        scientificName: "Monstera Deliciosa",
+        careTips: ["Tưới nước 2 lần/tuần", "Để nơi có ánh sáng tán xạ", "Lau lá thường xuyên"],
+        polishedScripts: scenes.map(s => `Đây là đoạn kịch bản mẫu AI viết cho cảnh: ${s.hint}`)
+      });
+    }, 2000); // Giả lập chờ 2 giây
+  });
+};
+
+const generateTTS = async (text, style) => { return new ArrayBuffer(0); }; // Giả lập tạo giọng nói
+const decodeAudioBuffer = async (bytes, ctx) => { return ctx.createBuffer(1, 1, 22050); }; // Giả lập xử lý âm thanh
+
+const exportVideo = async (scenes, aspectRatio, onProgress) => {
+  return new Promise((resolve) => {
+    let p = 0;
+    const interval = setInterval(() => {
+      p += 10;
+      onProgress(p);
+      if (p >= 100) {
+        clearInterval(interval);
+        resolve(new Blob(["fake video data"], { type: 'text/plain' }));
       }
+    }, 300);
+  });
+};
+
+// --- 3. CÁC COMPONENT CON (SceneBuilder, VideoPlayer) ---
+
+// Component nhập liệu cảnh
+const SceneBuilder = ({ scenes, onScenesChange }) => {
+  const addScene = () => {
+    onScenesChange([...scenes, { id: Date.now().toString(), imageUrl: '', hint: '' }]);
+  };
+
+  const updateScene = (index, field, value) => {
+    const newScenes = [...scenes];
+    newScenes[index] = { ...newScenes[index], [field]: value };
+    onScenesChange(newScenes);
+  };
+
+  const removeScene = (index) => {
+    const newScenes = scenes.filter((_, i) => i !== index);
+    onScenesChange(newScenes);
+  };
+
+  return (
+    <div className="space-y-4">
+      {scenes.map((scene, index) => (
+        <div key={scene.id} className="bg-slate-50 p-4 rounded-xl border border-slate-200 flex flex-col md:flex-row gap-4 animate-in slide-in-from-bottom-2">
+          <div className="w-full md:w-1/3 aspect-video bg-white rounded-lg border-2 border-dashed border-slate-300 flex flex-col items-center justify-center relative overflow-hidden group hover:border-green-500 transition-colors">
+            {scene.imageUrl ? (
+              <img src={scene.imageUrl} alt="" className="w-full h-full object-cover" />
+            ) : (
+              <div className="text-center p-4">
+                <ImageIcon className="w-8 h-8 text-slate-300 mx-auto mb-2" />
+                <span className="text-xs text-slate-400">Dán link ảnh vào ô dưới</span>
+              </div>
+            )}
+             {/* Giả lập upload bằng input text cho đơn giản */}
+             <input 
+                type="text" 
+                placeholder="Dán URL ảnh vào đây..."
+                className="absolute bottom-0 left-0 w-full p-2 text-xs bg-white/90 border-t"
+                value={scene.imageUrl}
+                onChange={(e) => updateScene(index, 'imageUrl', e.target.value)}
+             />
+          </div>
+          
+          <div className="flex-1 space-y-2">
+            <div className="flex justify-between items-center">
+              <span className="text-xs font-bold text-slate-500 uppercase">Cảnh {index + 1}</span>
+              {scenes.length > 1 && (
+                <button onClick={() => removeScene(index)} className="text-red-400 hover:text-red-600">
+                  <Trash2 size={16} />
+                </button>
+              )}
+            </div>
+            <textarea
+              placeholder="Gợi ý cho AI: VD: Quay cận cảnh lá, nói về màu sắc..."
+              className="w-full h-24 p-3 rounded-lg border border-slate-200 focus:border-green-500 focus:ring-1 focus:ring-green-500 outline-none text-sm resize-none"
+              value={scene.hint}
+              onChange={(e) => updateScene(index, 'hint', e.target.value)}
+            />
+          </div>
+        </div>
+      ))}
+      
+      <button 
+        onClick={addScene}
+        className="w-full py-3 border-2 border-dashed border-slate-300 rounded-xl text-slate-500 font-bold hover:border-green-500 hover:text-green-600 transition-all flex items-center justify-center gap-2"
+      >
+        <Plus size={20} /> Thêm phân cảnh mới
+      </button>
+    </div>
+  );
+};
+
+// Component xem trước video (Giả lập hiển thị)
+const VideoPlayer = ({ scenes, aspectRatio }) => {
+  const [currentSceneIdx, setCurrentSceneIdx] = useState(0);
+  
+  // Tự động chuyển cảnh demo
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setCurrentSceneIdx(prev => (prev + 1) % scenes.length);
+    }, 3000);
+    return () => clearInterval(timer);
+  }, [scenes.length]);
+
+  const currentScene = scenes[currentSceneIdx];
+  const isVertical = aspectRatio === '9:16';
+
+  return (
+    <div className={`mx-auto bg-black rounded-2xl overflow-hidden relative shadow-2xl ${isVertical ? 'max-w-[300px] aspect-[9/16]' : 'max-w-[500px] aspect-square'}`}>
+       {currentScene && (
+         <>
+            <img src={currentScene.imageUrl} className="w-full h-full object-cover opacity-80" />
+            <div className="absolute bottom-0 left-0 w-full p-6 bg-gradient-to-t from-black/80 to-transparent">
+              <p className="text-white font-medium text-center text-sm md:text-base drop-shadow-md">
+                "{currentScene.scriptText}"
+              </p>
+            </div>
+         </>
+       )}
+       <div className="absolute top-4 right-4 bg-red-600 text-white text-[10px] font-bold px-2 py-1 rounded animate-pulse">
+         PREVIEW MODE
+       </div>
+    </div>
+  );
+};
+
+// --- 4. APP CHÍNH (Code gốc của bạn) ---
+const App = () => {
+  const [scenesInput, setScenesInput] = useState([
+    { id: '1', imageUrl: 'https://images.unsplash.com/photo-1596720513904-747447432f80', hint: 'Giới thiệu tổng quan về cây' }
+  ]);
+  const [analysis, setAnalysis] = useState(null);
+  const [selectedStyle, setSelectedStyle] = useState(ReviewStyle.EDUCATIONAL);
+  const [aspectRatio, setAspectRatio] = useState('9:16');
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
+  const [exportProgress, setExportProgress] = useState(0);
+  const [finalScenes, setFinalScenes] = useState([]);
+  const [step, setStep] = useState(1);
+
+  const handleProcess = async () => {
+    const validScenes = scenesInput.filter(s => s.imageUrl && s.hint);
+    if (validScenes.length === 0) {
+      alert("Vui lòng thêm ít nhất một phân cảnh có ảnh và gợi ý kịch bản.");
+      return;
     }
-    </script>
 
-    <style>
-      body { font-family: 'Inter', sans-serif; background-color: #f8fafc; }
-      .ken-burns { animation: kenburns-effect 20s linear infinite alternate; }
-      @keyframes kenburns-effect {
-        0% { transform: scale(1.0) translate(0, 0); }
-        100% { transform: scale(1.15) translate(1%, -1%); }
+    setIsProcessing(true);
+    try {
+      const result = await analyzePlantAndHints(validScenes, selectedStyle);
+      setAnalysis(result);
+
+      // Giả lập xử lý Audio Context (trên trình duyệt thật cần user interaction trước)
+      const readyScenes = [];
+      for (let i = 0; i < result.polishedScripts.length; i++) {
+        readyScenes.push({
+          imageUrl: validScenes[i].imageUrl,
+          scriptText: result.polishedScripts[i],
+          audioBuffer: null // Bỏ qua audio thật ở bản demo
+        });
       }
-    </style>
-</head>
-<body>
-    <div id="root"></div>
 
-    <script type="text/babel" data-type="module">
-        import React, { useState, useEffect } from 'react';
-        import ReactDOM from 'react-dom/client';
-        import { Camera, Upload } from 'lucide-react'; // Ví dụ import icon
+      setFinalScenes(readyScenes);
+      setStep(3);
+    } catch (error) {
+      console.error("Lỗi xử lý:", error);
+      alert("Không thể tạo video review.");
+    } finally {
+      setIsProcessing(false);
+    }
+  };
 
-        // --- BẮT ĐẦU PHẦN COMPONENT APP ---
-        // Bạn hãy thay thế nội dung bên trong function App này bằng code của bạn
-        
-        function App() {
-            return (
-                <div className="min-h-screen flex flex-col items-center justify-center p-4">
-                    <div className="bg-white p-8 rounded-2xl shadow-xl max-w-md w-full ken-burns border border-gray-100">
-                        <h1 className="text-3xl font-bold text-green-600 mb-2 text-center">
-                           PlantReview AI 🌿
-                        </h1>
-                        <p className="text-gray-500 text-center mb-6">
-                           Sẵn sàng nhận diện cây trồng
-                        </p>
-                        
-                        <div className="space-y-4">
-                            <button className="w-full bg-green-500 hover:bg-green-600 text-white py-3 rounded-lg font-medium transition flex items-center justify-center gap-2">
-                                <Camera size={20} />
-                                Chụp ảnh cây
-                            </button>
-                            
-                            <button className="w-full bg-white border border-gray-300 text-gray-700 py-3 rounded-lg font-medium hover:bg-gray-50 transition flex items-center justify-center gap-2">
-                                <Upload size={20} />
-                                Tải ảnh lên
-                            </button>
-                        </div>
-                        
-                        <div className="mt-8 p-4 bg-blue-50 text-blue-700 text-sm rounded-lg text-center">
-                            Code đã chạy thành công trên GitHub Pages!
-                        </div>
+  const handleExport = async () => {
+    if (finalScenes.length === 0) return;
+    setIsExporting(true);
+    setExportProgress(0);
+    try {
+      await exportVideo(finalScenes, aspectRatio, (p) => setExportProgress(p));
+      alert("Xuất video thành công! (Demo)");
+    } catch (error) {
+      console.error("Lỗi xuất video:", error);
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
+  return (
+    <div className="min-h-screen bg-slate-50 pb-20">
+      <header className="bg-white border-b border-slate-200 sticky top-0 z-20 shadow-sm">
+        <div className="max-w-4xl mx-auto px-4 h-16 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <div className="w-10 h-10 bg-green-600 rounded-xl flex items-center justify-center text-white">
+              <Leaf size={24} />
+            </div>
+            <h1 className="font-bold text-xl text-slate-900 tracking-tight">PlantReview <span className="text-green-600">AI</span></h1>
+          </div>
+          <div className="hidden md:flex items-center gap-4">
+             <div className="flex items-center gap-2">
+                <span className={`text-xs font-bold ${step >= 1 ? 'text-green-600' : 'text-slate-300'}`}>1. XÂY DỰNG</span>
+                <ChevronRight size={14} className="text-slate-300" />
+                <span className={`text-xs font-bold ${step >= 3 ? 'text-green-600' : 'text-slate-300'}`}>2. XUẤT VIDEO</span>
+             </div>
+          </div>
+        </div>
+      </header>
+
+      <main className="max-w-4xl mx-auto px-4 py-8">
+        {step === 1 && (
+          <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+            <div className="text-center space-y-2">
+              <h2 className="text-4xl font-extrabold text-slate-900 tracking-tight">Kể chuyện về cây của bạn</h2>
+              <p className="text-slate-500 text-lg">Thêm ảnh thực tế và gợi ý kịch bản review chân thực.</p>
+            </div>
+
+            <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
+              <h3 className="font-semibold text-slate-800 mb-4 flex items-center gap-2">
+                <Sparkles size={18} className="text-green-500" />
+                Chọn phong cách review
+              </h3>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                {[
+                  { id: ReviewStyle.EDUCATIONAL, label: 'Kiến thức', desc: 'Sâu sắc, tỉ mỉ' },
+                  { id: ReviewStyle.ENTHUSIASTIC, label: 'Hào hứng', desc: 'Năng lượng cao' },
+                  { id: ReviewStyle.RELAXING, label: 'Thư giãn', desc: 'Nhẹ nhàng, chill' },
+                  { id: ReviewStyle.QUICK, label: 'Ngắn gọn', desc: 'Nhanh, súc tích' },
+                ].map(style => (
+                  <button
+                    key={style.id}
+                    onClick={() => setSelectedStyle(style.id)}
+                    className={`p-3 rounded-xl border-2 transition-all text-center ${selectedStyle === style.id ? 'border-green-600 bg-green-50 shadow-inner' : 'border-slate-100 hover:border-slate-200 bg-slate-50/50'}`}
+                  >
+                    <div className={`text-sm font-bold mb-0.5 ${selectedStyle === style.id ? 'text-green-700' : 'text-slate-600'}`}>
+                      {style.label}
                     </div>
-                </div>
-            );
-        }
-        // --- KẾT THÚC PHẦN COMPONENT APP ---
+                    <div className="text-[10px] text-slate-400">{style.desc}</div>
+                  </button>
+                ))}
+              </div>
+            </div>
 
-        // Render ra màn hình
-        const rootElement = document.getElementById('root');
-        const root = ReactDOM.createRoot(rootElement);
-        root.render(
-            <React.StrictMode>
-                <App />
-            </React.StrictMode>
-        );
-    </script>
-</body>
-</html>
+            <div className="space-y-4">
+              <h3 className="font-semibold text-slate-800 flex items-center gap-2 ml-1">
+                <Video size={18} className="text-green-500" />
+                Thiết kế từng phân cảnh
+              </h3>
+              <SceneBuilder scenes={scenesInput} onScenesChange={setScenesInput} />
+            </div>
+
+            <div className="bg-white p-4 rounded-2xl border border-slate-200 flex flex-col md:flex-row md:items-center justify-between gap-4">
+              <span className="text-sm font-bold text-slate-700">Tỷ lệ khung hình đầu ra</span>
+              <div className="flex gap-2">
+                {['1:1', '9:16'].map(format => (
+                  <button
+                    key={format}
+                    onClick={() => setAspectRatio(format)}
+                    className={`flex-1 md:flex-none px-6 py-2 text-xs font-bold border-2 rounded-lg transition-all ${aspectRatio === format ? 'border-green-600 bg-green-50 text-green-600' : 'border-slate-100 text-slate-400'}`}
+                  >
+                    {format === '1:1' ? 'Vuông (Post)' : 'Dọc (Story/TikTok)'}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <button
+              onClick={handleProcess}
+              disabled={isProcessing}
+              className="w-full py-5 bg-slate-900 text-white rounded-2xl font-bold shadow-2xl hover:bg-black disabled:bg-slate-300 transition-all flex items-center justify-center gap-2 group"
+            >
+              {isProcessing ? (
+                <>
+                  <Loader2 className="animate-spin" size={20} />
+                  AI đang gom cảnh và tạo video review...
+                </>
+              ) : (
+                <>
+                  Gom toàn bộ phân cảnh & Tạo Review
+                  <ChevronRight size={20} className="group-hover:translate-x-1 transition-transform" />
+                </>
+              )}
+            </button>
+          </div>
+        )}
+
+        {step === 3 && analysis && (
+          <div className="space-y-8 animate-in fade-in zoom-in-95 duration-500">
+            <div className="text-center">
+              <h2 className="text-3xl font-extrabold text-slate-900">Review: {analysis.name}</h2>
+              <p className="text-slate-500 italic">{analysis.scientificName}</p>
+            </div>
+
+            <VideoPlayer scenes={finalScenes} aspectRatio={aspectRatio} />
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-2xl mx-auto">
+              <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
+                <h4 className="font-bold text-slate-900 text-xs mb-3 uppercase tracking-widest text-green-600 flex items-center gap-2">
+                  <CheckCircle size={14} />
+                  Mẹo Chăm Sóc Thực Tế
+                </h4>
+                <ul className="space-y-3">
+                  {analysis.careTips.map((tip, i) => (
+                    <li key={i} className="text-sm text-slate-600 flex items-start gap-3">
+                      <div className="w-5 h-5 rounded-full bg-green-100 flex items-center justify-center shrink-0 mt-0.5">
+                        <span className="text-[10px] font-bold text-green-600">{i+1}</span>
+                      </div>
+                      {tip}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+
+              <div className="flex flex-col gap-3">
+                <button 
+                  onClick={() => setStep(1)}
+                  disabled={isExporting}
+                  className="w-full py-4 bg-white border border-slate-200 text-slate-700 font-bold rounded-2xl hover:bg-slate-50 transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
+                >
+                  <History size={18} />
+                  Chỉnh sửa phân cảnh
+                </button>
+                <button 
+                  onClick={handleExport}
+                  disabled={isExporting}
+                  className="w-full py-4 bg-green-600 text-white font-bold rounded-2xl shadow-lg shadow-green-100 flex flex-col items-center justify-center gap-1 hover:bg-green-700 disabled:bg-slate-400 transition-all relative overflow-hidden"
+                >
+                  {isExporting ? (
+                    <>
+                      <div className="flex items-center gap-2">
+                        <Loader2 className="animate-spin" size={20} />
+                        Đang xuất video... {Math.round(exportProgress)}%
+                      </div>
+                      <div className="absolute bottom-0 left-0 h-1 bg-white/30 transition-all" style={{ width: `${exportProgress}%` }} />
+                    </>
+                  ) : (
+                    <>
+                      <div className="flex items-center gap-2">
+                        <Download size={20} />
+                        Xuất Video Hoàn Chỉnh
+                      </div>
+                      <span className="text-[10px] font-normal opacity-80">Ghi lại toàn bộ phân cảnh thành MP4</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+      </main>
+    </div>
+  );
+};
+
+const root = ReactDOM.createRoot(document.getElementById('root'));
+root.render(<App />);
