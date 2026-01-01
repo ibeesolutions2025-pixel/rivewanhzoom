@@ -1,256 +1,51 @@
 <!DOCTYPE html>
-<html lang="vi">
+<html lang="en">
 <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>PlantReview AI - Gemini 3 Preview</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RapCinematic AI - Pro Studio</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-
-    <script type="importmap">
-    {
-      "imports": {
-        "react": "https://esm.sh/react@18.2.0",
-        "react-dom/client": "https://esm.sh/react-dom@18.2.0/client",
-        "lucide-react": "https://esm.sh/lucide-react@0.263.1",
-        "@google/generative-ai": "https://esm.sh/@google/generative-ai"
-      }
-    }
-    </script>
-
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&family=Plus+Jakarta+Sans:wght@300;400;600;700&display=swap" rel="stylesheet">
     <style>
-      body { font-family: 'Inter', sans-serif; background-color: #0f172a; color: white; } /* Giao diện tối Dark Mode cho chuyên nghiệp */
-      .animate-in { animation: fadeIn 0.5s ease-out forwards; }
-      @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
-      .gradient-text { background: linear-gradient(to right, #60a5fa, #c084fc); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
-      .glass-panel { background: rgba(30, 41, 59, 0.7); backdrop-filter: blur(10px); border: 1px solid rgba(255,255,255,0.1); }
+        body {
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            background-color: #020205;
+            color: #fafafa;
+            overflow-x: hidden;
+        }
+        .font-orbitron {
+            font-family: 'Orbitron', sans-serif;
+        }
+        .glass {
+            background: rgba(255, 255, 255, 0.03);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+        }
+        .neon-border {
+            box-shadow: 0 0 15px rgba(139, 92, 246, 0.3);
+            border: 1px solid rgba(139, 92, 246, 0.5);
+        }
+        .glow-text {
+            text-shadow: 0 0 20px rgba(139, 92, 246, 0.8);
+        }
+        .scanline {
+            width: 100%;
+            height: 2px;
+            background: rgba(139, 92, 246, 0.2);
+            position: absolute;
+            animation: scan 3s linear infinite;
+            z-index: 10;
+        }
+        @keyframes scan {
+            0% { top: 0; }
+            100% { top: 100%; }
+        }
+        ::-webkit-scrollbar { width: 4px; }
+        ::-webkit-scrollbar-thumb { background: #4c1d95; border-radius: 10px; }
     </style>
 </head>
 <body>
     <div id="root"></div>
-
-    <script type="text/babel" data-type="module">
-        import React, { useState } from 'react';
-        import ReactDOM from 'react-dom/client';
-        import { Leaf, Sparkles, Loader2, History, Upload, X, Key, CheckCircle, Download, Zap, Mic, Cpu } from 'lucide-react';
-        import { GoogleGenerativeAI } from "@google/generative-ai";
-
-        // --- CẤU HÌNH API ---
-        const MY_API_KEY = "AIzaSyBeJvLC_0-VXXpHK9wZ35BlyQy0mp46vFc"; 
-        
-        // Dùng model 1.5 nhưng prompt sẽ ép hệ thống hoạt động với tư duy cao cấp
-        const MODEL_NAME = "gemini-1.5-flash"; 
-
-        const STYLES = [
-            { id: 'educational', label: 'Kiến thức', desc: 'Chuyên sâu' },
-            { id: 'enthusiastic', label: 'Hào hứng', desc: 'Viral TikTok' },
-            { id: 'cinematic', label: 'Điện ảnh', desc: 'Nghệ thuật' },
-            { id: 'quick', label: 'Nhanh', desc: 'Súc tích' }
-        ];
-
-        const App = () => {
-            const [step, setStep] = useState(1);
-            const [selectedStyle, setSelectedStyle] = useState('enthusiastic');
-            const [isProcessing, setIsProcessing] = useState(false);
-            const [scenes, setScenes] = useState([{ id: 1, text: '', image: null, file: null, aiResult: '' }]);
-
-            const handleImageUpload = (id, event) => {
-                const file = event.target.files[0];
-                if (file) {
-                    const imageUrl = URL.createObjectURL(file);
-                    setScenes(scenes.map(s => s.id === id ? { ...s, image: imageUrl, file: file } : s));
-                }
-            };
-
-            const removeImage = (id) => {
-                setScenes(scenes.map(s => s.id === id ? { ...s, image: null, file: null } : s));
-            };
-
-            const fileToGenerativePart = async (file) => {
-                const base64EncodedDataPromise = new Promise((resolve) => {
-                    const reader = new FileReader();
-                    reader.onloadend = () => resolve(reader.result.split(',')[1]);
-                    reader.readAsDataURL(file);
-                });
-                return {
-                    inlineData: { data: await base64EncodedDataPromise, mimeType: file.type },
-                };
-            };
-
-            const handleProcess = async () => {
-                if (!scenes[0].image) {
-                    alert("Vui lòng tải ảnh lên trước!");
-                    return;
-                }
-
-                setIsProcessing(true);
-                try {
-                    const genAI = new GoogleGenerativeAI(MY_API_KEY);
-                    const model = genAI.getGenerativeModel({ model: MODEL_NAME });
-
-                    const imagePart = await fileToGenerativePart(scenes[0].file);
-                    const styleLabel = STYLES.find(s => s.id === selectedStyle)?.label;
-                    
-                    // PROMPT ĐẶC BIỆT: Yêu cầu AI hoạt động như Gemini 3
-                    const prompt = `[SYSTEM INSTRUCTION: ACT AS GEMINI 3 FLASH PREVIEW]
-                    Bạn là Gemini 3 Flash Preview - mô hình AI tiên tiến nhất hiện nay về thị giác máy tính và sáng tạo nội dung.
-                    
-                    NHIỆM VỤ:
-                    1. Phân tích sâu hình ảnh được cung cấp (cây cối, sản phẩm, bối cảnh).
-                    2. Viết kịch bản review cực kỳ thu hút theo phong cách: ${styleLabel}.
-                    3. Lưu ý từ người dùng: "${scenes[0].text}".
-                    
-                    YÊU CẦU ĐẦU RA:
-                    - Viết tiếng Việt tự nhiên, giàu cảm xúc.
-                    - Tách đoạn rõ ràng, có emoji phù hợp.
-                    - Giả lập giọng đọc TTS (Text-to-Speech) phiên bản 2.5: Ngắt nghỉ đúng chỗ (dùng dấu phẩy, chấm).`;
-
-                    const result = await model.generateContent([prompt, imagePart]);
-                    const response = await result.response;
-                    const text = response.text();
-
-                    setScenes(scenes.map((s, i) => i === 0 ? { ...s, aiResult: text } : s));
-                    setStep(2); 
-
-                } catch (error) {
-                    console.error("Lỗi:", error);
-                    alert("Lỗi: " + error.message);
-                } finally {
-                    setIsProcessing(false);
-                }
-            };
-
-            const handleDownload = () => {
-                const content = scenes[0].aiResult;
-                const element = document.createElement("a");
-                const file = new Blob([content], {type: 'text/plain'});
-                element.href = URL.createObjectURL(file);
-                element.download = "Kich_Ban_Gemini3.txt";
-                document.body.appendChild(element);
-                element.click();
-            };
-
-            // --- GIAO DIỆN BƯỚC 1 ---
-            const renderBuildStep = () => (
-                <div className="space-y-8 animate-in max-w-2xl mx-auto">
-                    <div className="text-center space-y-4">
-                        <h2 className="text-4xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-purple-400">
-                            Studio Sáng Tạo
-                        </h2>
-                        <div className="flex flex-wrap items-center justify-center gap-2">
-                             <span className="text-[10px] font-bold bg-blue-900/50 text-blue-200 px-3 py-1 rounded-full border border-blue-500/30 flex items-center gap-1">
-                                <Cpu size={10} /> Gemini 3 Flash Preview
-                             </span>
-                             <span className="text-[10px] font-bold bg-purple-900/50 text-purple-200 px-3 py-1 rounded-full border border-purple-500/30 flex items-center gap-1">
-                                <Mic size={10} /> Gemini 2.5 TTS Ready
-                             </span>
-                        </div>
-                    </div>
-
-                    {/* Chọn Style */}
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                        {STYLES.map(style => (
-                            <button
-                                key={style.id}
-                                onClick={() => setSelectedStyle(style.id)}
-                                className={`p-3 rounded-xl border transition-all glass-panel ${selectedStyle === style.id ? 'border-blue-500 bg-blue-500/20 text-white' : 'border-slate-700 hover:border-slate-500 text-slate-300'}`}
-                            >
-                                <div className="text-sm font-bold">{style.label}</div>
-                                <div className="text-[10px] opacity-60">{style.desc}</div>
-                            </button>
-                        ))}
-                    </div>
-
-                    {/* Upload */}
-                    <div className="glass-panel p-6 rounded-2xl flex flex-col md:flex-row gap-6">
-                        <div className="w-full md:w-48 aspect-square flex-shrink-0">
-                            {scenes[0].image ? (
-                                <div className="w-full h-full relative rounded-xl overflow-hidden border border-slate-600 group">
-                                    <img src={scenes[0].image} className="w-full h-full object-cover" />
-                                    <button onClick={() => removeImage(1)} className="absolute top-2 right-2 bg-black/60 text-white p-1.5 rounded-full hover:bg-red-500 transition"><X size={16}/></button>
-                                </div>
-                            ) : (
-                                <label className="w-full h-full rounded-xl border-2 border-dashed border-slate-600 flex flex-col items-center justify-center cursor-pointer hover:border-blue-500 hover:bg-blue-500/10 transition group">
-                                    <div className="w-12 h-12 rounded-full bg-slate-800 flex items-center justify-center mb-3 group-hover:scale-110 transition">
-                                        <Upload className="text-blue-400" size={24}/>
-                                    </div>
-                                    <span className="text-xs font-bold text-slate-400">Tải ảnh lên</span>
-                                    <input type="file" accept="image/*" className="hidden" onChange={(e) => handleImageUpload(1, e)} />
-                                </label>
-                            )}
-                        </div>
-                        <div className="flex-1">
-                            <textarea 
-                                placeholder="Ghi chú cho AI: VD: Cây này tên là Monstera, muốn giọng văn sang trọng..."
-                                className="w-full h-full min-h-[180px] p-4 text-sm bg-slate-800/50 border border-slate-700 rounded-xl focus:ring-1 focus:ring-blue-500 outline-none resize-none text-slate-200 placeholder-slate-500"
-                                value={scenes[0].text}
-                                onChange={(e) => setScenes([{...scenes[0], text: e.target.value}])}
-                            ></textarea>
-                        </div>
-                    </div>
-
-                    <button
-                        onClick={handleProcess}
-                        disabled={isProcessing}
-                        className="w-full py-4 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-xl font-bold hover:from-blue-500 hover:to-purple-500 disabled:opacity-50 transition flex items-center justify-center gap-2 shadow-lg shadow-blue-900/20"
-                    >
-                        {isProcessing ? <><Loader2 className="animate-spin" /> Đang xử lý trên Gemini 3...</> : <><Sparkles className="text-yellow-300" fill="currentColor" /> Tạo Kịch Bản Review</>}
-                    </button>
-                </div>
-            );
-
-            // --- GIAO DIỆN KẾT QUẢ ---
-            const renderResultStep = () => (
-                <div className="space-y-6 animate-in max-w-md mx-auto">
-                    <div className="text-center">
-                        <h2 className="text-2xl font-bold text-white mb-2">Kết Quả Phân Tích</h2>
-                        <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-green-900/30 border border-green-500/30 text-green-400 text-[10px] font-bold">
-                             <CheckCircle size={10} /> Hoàn tất xử lý
-                        </div>
-                    </div>
-
-                    <div className="glass-panel p-1 rounded-2xl overflow-hidden shadow-2xl">
-                        <div className="aspect-[9/16] relative bg-black">
-                             {scenes[0].image && <img src={scenes[0].image} className="w-full h-full object-cover opacity-60" />}
-                             <div className="absolute inset-0 overflow-y-auto p-6 flex flex-col justify-end bg-gradient-to-t from-black via-black/60 to-transparent">
-                                <div className="bg-black/40 backdrop-blur-md p-5 rounded-xl border border-white/10">
-                                    <h4 className="text-[10px] font-bold text-blue-400 mb-2 uppercase tracking-wider">Kịch bản Gemini 3.0</h4>
-                                    <p className="text-white text-sm font-medium leading-relaxed shadow-black drop-shadow-md whitespace-pre-wrap">
-                                        {scenes[0].aiResult}
-                                    </p>
-                                </div>
-                             </div>
-                        </div>
-                    </div>
-
-                    <div className="flex gap-3">
-                        <button onClick={() => setStep(1)} className="flex-1 py-3 border border-slate-600 rounded-xl font-bold text-slate-300 hover:bg-slate-800 transition flex justify-center gap-2">
-                            <History size={18}/> Làm lại
-                        </button>
-                        <button onClick={handleDownload} className="flex-1 py-3 bg-white text-black rounded-xl font-bold hover:bg-slate-200 transition flex justify-center gap-2 shadow-lg">
-                            <Download size={18}/> Lưu Kịch Bản
-                        </button>
-                    </div>
-                </div>
-            );
-
-            return (
-                <div className="min-h-screen pb-20 bg-slate-900">
-                    <header className="border-b border-slate-800 sticky top-0 z-20 bg-slate-900/80 backdrop-blur-md px-4 h-16 flex items-center justify-between">
-                        <div className="flex items-center gap-2 font-bold text-lg cursor-pointer" onClick={() => setStep(1)}>
-                            <Leaf className="text-green-400" /> <span className="text-white">PlantReview</span> <span className="gradient-text">Studio</span>
-                        </div>
-                    </header>
-                    <main className="px-4 py-8">
-                        {step === 1 ? renderBuildStep() : renderResultStep()}
-                    </main>
-                </div>
-            );
-        };
-
-        const root = ReactDOM.createRoot(document.getElementById('root'));
-        root.render(<App />);
-    </script>
+    <script type="module" src="/src/index.tsx"></script>
 </body>
 </html>
