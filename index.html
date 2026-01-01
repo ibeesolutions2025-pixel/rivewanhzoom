@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>PlantReview AI - Free Fix</title>
+    <title>PlantReview AI - Stable Fix</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
@@ -34,7 +34,7 @@
         import { Leaf, Sparkles, Loader2, History, Upload, X, Key, CheckCircle, Download } from 'lucide-react';
         import { GoogleGenerativeAI } from "@google/generative-ai";
 
-        // --- KEY CỦA BẠN (Đã tích hợp) ---
+        // --- KEY CỦA BẠN (Giữ nguyên) ---
         const MY_API_KEY = "AIzaSyBeJvLC_0-VXXpHK9wZ35BlyQy0mp46vFc";
 
         // --- DANH SÁCH PHONG CÁCH ---
@@ -76,7 +76,7 @@
                 };
             };
 
-            // --- HÀM GỌI AI (ĐÃ SỬA LỖI 404) ---
+            // --- HÀM GỌI AI (SỬA LỖI MODEL) ---
             const handleProcess = async () => {
                 if (!scenes[0].image) {
                     alert("Vui lòng tải ảnh lên trước!");
@@ -87,16 +87,17 @@
                 try {
                     const genAI = new GoogleGenerativeAI(MY_API_KEY);
                     
-                    // SỬA QUAN TRỌNG: Đổi tên model sang 'gemini-1.5-flash-latest' để tránh lỗi 404
-                    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash-latest" });
+                    // SỬA CHỮA: Dùng tên phiên bản cụ thể 'gemini-1.5-flash-001' thay vì tên ngắn
+                    // Đây là phiên bản ổn định nhất cho API miễn phí hiện tại
+                    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash-001" });
 
                     const imagePart = await fileToGenerativePart(scenes[0].file);
                     const styleLabel = STYLES.find(s => s.id === selectedStyle)?.label;
                     
-                    const prompt = `Bạn là chuyên gia review. Hãy xem ảnh này và viết một kịch bản lời bình ngắn gọn, hấp dẫn.
+                    const prompt = `Bạn là chuyên gia review sản phẩm và cây cảnh. Hãy xem ảnh này và viết một kịch bản lời bình (khoảng 3-4 câu) thật hấp dẫn để làm video TikTok.
                     - Phong cách: ${styleLabel}.
-                    - Ghi chú từ người dùng: "${scenes[0].text}".
-                    - Yêu cầu: Viết tiếng Việt tự nhiên. Nếu là cây cối thì nói về cách chăm sóc, vẻ đẹp. Nếu là đồ vật thì nói về công năng.`;
+                    - Ghi chú: "${scenes[0].text}".
+                    - Yêu cầu: Viết tiếng Việt tự nhiên, tập trung vào lợi ích hoặc vẻ đẹp.`;
 
                     const result = await model.generateContent([prompt, imagePart]);
                     const response = await result.response;
@@ -106,9 +107,11 @@
                     setStep(2); 
 
                 } catch (error) {
-                    console.error(error);
-                    // Thông báo lỗi chi tiết hơn
-                    alert("Lỗi kết nối: " + error.message + "\n\n(Nếu vẫn lỗi, hãy thử tạo lại Key mới trên Google AI Studio)");
+                    console.error("Chi tiết lỗi:", error);
+                    let msg = error.message;
+                    if (msg.includes("404")) msg = "Không tìm thấy Model AI. Google có thể đang bảo trì model này.";
+                    if (msg.includes("400")) msg = "Ảnh không hợp lệ hoặc dữ liệu gửi đi bị lỗi.";
+                    alert("Lỗi: " + msg + "\n\n(Hãy thử lại sau vài giây hoặc đổi ảnh khác)");
                 } finally {
                     setIsProcessing(false);
                 }
@@ -119,7 +122,7 @@
                 const element = document.createElement("a");
                 const file = new Blob([content], {type: 'text/plain'});
                 element.href = URL.createObjectURL(file);
-                element.download = "Review_AI.txt";
+                element.download = "Kich_Ban_AI.txt";
                 document.body.appendChild(element);
                 element.click();
             };
@@ -129,7 +132,7 @@
                 <div className="space-y-6 animate-in">
                     <div className="text-center space-y-2">
                         <h2 className="text-3xl font-extrabold text-slate-900">Kể chuyện qua ảnh</h2>
-                        <p className="text-slate-500">Đã sửa lỗi kết nối. Tải ảnh lên để thử ngay.</p>
+                        <p className="text-slate-500">Đã cập nhật phiên bản ổn định (v1.5-001).</p>
                     </div>
 
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
@@ -178,7 +181,7 @@
                     </button>
                     
                     <div className="flex items-center justify-center gap-1 text-[10px] text-green-600 font-medium">
-                        <CheckCircle size={10} /> Đã cập nhật Model: gemini-1.5-flash-latest
+                        <CheckCircle size={10} /> Model: gemini-1.5-flash-001
                     </div>
                 </div>
             );
