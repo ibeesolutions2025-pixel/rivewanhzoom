@@ -1,236 +1,41 @@
+
 <!DOCTYPE html>
-<html lang="vi">
-<head>
+<html lang="en">
+  <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>PlantReview AI - Stable Fix</title>
+    <title>PlantReview AI</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-
-    <script type="importmap">
-    {
-      "imports": {
-        "react": "https://esm.sh/react@18.2.0",
-        "react-dom/client": "https://esm.sh/react-dom@18.2.0/client",
-        "lucide-react": "https://esm.sh/lucide-react@0.263.1",
-        "@google/generative-ai": "https://esm.sh/@google/generative-ai"
-      }
-    }
-    </script>
-
     <style>
-      body { font-family: 'Inter', sans-serif; background-color: #f8fafc; }
-      .animate-in { animation: fadeIn 0.5s ease-out forwards; }
-      @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+      body {
+        font-family: 'Inter', sans-serif;
+        background-color: #f8fafc;
+      }
+      /* Ken Burns mượt mà hơn và chỉ zoom nhẹ để giữ độ nét */
+      .ken-burns {
+        animation: kenburns-effect 20s linear infinite alternate;
+      }
+      @keyframes kenburns-effect {
+        0% { transform: scale(1.0) translate(0, 0); }
+        50% { transform: scale(1.1) translate(-1%, 1%); }
+        100% { transform: scale(1.15) translate(1%, -1%); }
+      }
     </style>
+  <script type="importmap">
+{
+  "imports": {
+    "react/": "https://esm.sh/react@^19.2.3/",
+    "react": "https://esm.sh/react@^19.2.3",
+    "react-dom/": "https://esm.sh/react-dom@^19.2.3/",
+    "@google/genai": "https://esm.sh/@google/genai@^1.34.0",
+    "lucide-react": "https://esm.sh/lucide-react@^0.562.0"
+  }
+}
+</script>
 </head>
-<body>
+  <body>
     <div id="root"></div>
-
-    <script type="text/babel" data-type="module">
-        import React, { useState } from 'react';
-        import ReactDOM from 'react-dom/client';
-        import { Leaf, Sparkles, Loader2, History, Upload, X, Key, CheckCircle, Download } from 'lucide-react';
-        import { GoogleGenerativeAI } from "@google/generative-ai";
-
-        // --- KEY CỦA BẠN (Giữ nguyên) ---
-        const MY_API_KEY = "AIzaSyBeJvLC_0-VXXpHK9wZ35BlyQy0mp46vFc";
-
-        // --- DANH SÁCH PHONG CÁCH ---
-        const STYLES = [
-            { id: 'educational', label: 'Kiến thức', desc: 'Sâu sắc, tỉ mỉ' },
-            { id: 'enthusiastic', label: 'Hào hứng', desc: 'Năng lượng cao' },
-            { id: 'relaxing', label: 'Thư giãn', desc: 'Nhẹ nhàng, chill' },
-            { id: 'quick', label: 'Ngắn gọn', desc: 'Nhanh, súc tích' }
-        ];
-
-        const App = () => {
-            const [step, setStep] = useState(1);
-            const [selectedStyle, setSelectedStyle] = useState('educational');
-            const [isProcessing, setIsProcessing] = useState(false);
-            const [scenes, setScenes] = useState([{ id: 1, text: '', image: null, file: null, aiResult: '' }]);
-
-            // Xử lý chọn ảnh
-            const handleImageUpload = (id, event) => {
-                const file = event.target.files[0];
-                if (file) {
-                    const imageUrl = URL.createObjectURL(file);
-                    setScenes(scenes.map(s => s.id === id ? { ...s, image: imageUrl, file: file } : s));
-                }
-            };
-
-            const removeImage = (id) => {
-                setScenes(scenes.map(s => s.id === id ? { ...s, image: null, file: null } : s));
-            };
-
-            // Hàm chuyển đổi file ảnh sang base64 để gửi cho AI
-            const fileToGenerativePart = async (file) => {
-                const base64EncodedDataPromise = new Promise((resolve) => {
-                    const reader = new FileReader();
-                    reader.onloadend = () => resolve(reader.result.split(',')[1]);
-                    reader.readAsDataURL(file);
-                });
-                return {
-                    inlineData: { data: await base64EncodedDataPromise, mimeType: file.type },
-                };
-            };
-
-            // --- HÀM GỌI AI (SỬA LỖI MODEL) ---
-            const handleProcess = async () => {
-                if (!scenes[0].image) {
-                    alert("Vui lòng tải ảnh lên trước!");
-                    return;
-                }
-
-                setIsProcessing(true);
-                try {
-                    const genAI = new GoogleGenerativeAI(MY_API_KEY);
-                    
-                    // SỬA CHỮA: Dùng tên phiên bản cụ thể 'gemini-1.5-flash-001' thay vì tên ngắn
-                    // Đây là phiên bản ổn định nhất cho API miễn phí hiện tại
-                    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash-001" });
-
-                    const imagePart = await fileToGenerativePart(scenes[0].file);
-                    const styleLabel = STYLES.find(s => s.id === selectedStyle)?.label;
-                    
-                    const prompt = `Bạn là chuyên gia review sản phẩm và cây cảnh. Hãy xem ảnh này và viết một kịch bản lời bình (khoảng 3-4 câu) thật hấp dẫn để làm video TikTok.
-                    - Phong cách: ${styleLabel}.
-                    - Ghi chú: "${scenes[0].text}".
-                    - Yêu cầu: Viết tiếng Việt tự nhiên, tập trung vào lợi ích hoặc vẻ đẹp.`;
-
-                    const result = await model.generateContent([prompt, imagePart]);
-                    const response = await result.response;
-                    const text = response.text();
-
-                    setScenes(scenes.map((s, i) => i === 0 ? { ...s, aiResult: text } : s));
-                    setStep(2); 
-
-                } catch (error) {
-                    console.error("Chi tiết lỗi:", error);
-                    let msg = error.message;
-                    if (msg.includes("404")) msg = "Không tìm thấy Model AI. Google có thể đang bảo trì model này.";
-                    if (msg.includes("400")) msg = "Ảnh không hợp lệ hoặc dữ liệu gửi đi bị lỗi.";
-                    alert("Lỗi: " + msg + "\n\n(Hãy thử lại sau vài giây hoặc đổi ảnh khác)");
-                } finally {
-                    setIsProcessing(false);
-                }
-            };
-
-            const handleDownload = () => {
-                const content = scenes[0].aiResult;
-                const element = document.createElement("a");
-                const file = new Blob([content], {type: 'text/plain'});
-                element.href = URL.createObjectURL(file);
-                element.download = "Kich_Ban_AI.txt";
-                document.body.appendChild(element);
-                element.click();
-            };
-
-            // --- GIAO DIỆN BƯỚC 1 ---
-            const renderBuildStep = () => (
-                <div className="space-y-6 animate-in">
-                    <div className="text-center space-y-2">
-                        <h2 className="text-3xl font-extrabold text-slate-900">Kể chuyện qua ảnh</h2>
-                        <p className="text-slate-500">Đã cập nhật phiên bản ổn định (v1.5-001).</p>
-                    </div>
-
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-                        {STYLES.map(style => (
-                            <button
-                                key={style.id}
-                                onClick={() => setSelectedStyle(style.id)}
-                                className={`p-2 rounded-lg border transition-all ${selectedStyle === style.id ? 'bg-green-100 border-green-500 text-green-800 shadow-sm' : 'bg-white border-slate-200 hover:bg-slate-50'}`}
-                            >
-                                <div className="text-sm font-bold">{style.label}</div>
-                            </button>
-                        ))}
-                    </div>
-
-                    <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col md:flex-row gap-4">
-                        <div className="w-full md:w-48 aspect-square flex-shrink-0">
-                            {scenes[0].image ? (
-                                <div className="w-full h-full relative rounded-lg overflow-hidden border group">
-                                    <img src={scenes[0].image} className="w-full h-full object-cover" />
-                                    <button onClick={() => removeImage(1)} className="absolute top-1 right-1 bg-black/50 text-white p-1 rounded-full hover:bg-red-500 transition"><X size={14}/></button>
-                                </div>
-                            ) : (
-                                <label className="w-full h-full bg-slate-50 border-2 border-dashed border-slate-300 rounded-lg flex flex-col items-center justify-center cursor-pointer hover:bg-green-50 hover:border-green-500 transition group">
-                                    <Upload className="text-green-600 mb-2" size={24}/>
-                                    <span className="text-xs font-bold text-slate-500">Tải ảnh lên</span>
-                                    <input type="file" accept="image/*" className="hidden" onChange={(e) => handleImageUpload(1, e)} />
-                                </label>
-                            )}
-                        </div>
-                        <div className="flex-1">
-                            <textarea 
-                                placeholder="Ghi chú thêm (VD: Tủ lạnh này mới mua, Cây này tên là Lan Ý...)"
-                                className="w-full h-full min-h-[150px] p-3 text-sm border border-slate-200 rounded-lg focus:ring-1 focus:ring-green-500 outline-none resize-none bg-slate-50 focus:bg-white"
-                                value={scenes[0].text}
-                                onChange={(e) => setScenes([{...scenes[0], text: e.target.value}])}
-                            ></textarea>
-                        </div>
-                    </div>
-
-                    <button
-                        onClick={handleProcess}
-                        disabled={isProcessing}
-                        className="w-full py-4 bg-slate-900 text-white rounded-xl font-bold hover:bg-black disabled:bg-slate-400 transition flex items-center justify-center gap-2 shadow-lg"
-                    >
-                        {isProcessing ? <><Loader2 className="animate-spin" /> Đang phân tích...</> : <><Sparkles className="text-yellow-400" fill="currentColor" /> Tạo Review Ngay</>}
-                    </button>
-                    
-                    <div className="flex items-center justify-center gap-1 text-[10px] text-green-600 font-medium">
-                        <CheckCircle size={10} /> Model: gemini-1.5-flash-001
-                    </div>
-                </div>
-            );
-
-            // --- GIAO DIỆN BƯỚC 2 ---
-            const renderResultStep = () => (
-                <div className="space-y-6 animate-in">
-                    <h2 className="text-2xl font-bold text-center text-green-700">Kết Quả Review</h2>
-
-                    <div className="bg-white rounded-xl shadow-lg border border-slate-200 overflow-hidden max-w-sm mx-auto">
-                        <div className="aspect-[9/16] relative bg-black">
-                             {scenes[0].image && <img src={scenes[0].image} className="w-full h-full object-cover opacity-70" />}
-                             <div className="absolute inset-0 overflow-y-auto p-6 flex flex-col justify-end bg-gradient-to-t from-black via-black/40 to-transparent">
-                                <div className="bg-black/40 backdrop-blur-sm p-4 rounded-xl border border-white/10">
-                                    <p className="text-white text-sm font-medium leading-relaxed shadow-black drop-shadow-md whitespace-pre-wrap">
-                                        {scenes[0].aiResult}
-                                    </p>
-                                </div>
-                             </div>
-                        </div>
-                    </div>
-
-                    <div className="flex gap-2">
-                        <button onClick={() => setStep(1)} className="flex-1 py-3 border bg-white rounded-xl font-bold text-slate-700 hover:bg-slate-50 flex justify-center gap-2 transition">
-                            <History size={18}/> Làm lại
-                        </button>
-                        <button onClick={handleDownload} className="flex-1 py-3 bg-green-600 text-white rounded-xl font-bold hover:bg-green-700 flex justify-center gap-2 shadow-lg transition">
-                            <Download size={18}/> Lưu Text
-                        </button>
-                    </div>
-                </div>
-            );
-
-            return (
-                <div className="min-h-screen pb-20">
-                    <header className="bg-white border-b border-slate-200 sticky top-0 z-20 shadow-sm px-4 h-16 flex items-center justify-between">
-                        <div className="flex items-center gap-2 font-bold text-lg text-slate-900 cursor-pointer" onClick={() => setStep(1)}>
-                            <Leaf className="text-green-600" /> PlantReview AI
-                        </div>
-                    </header>
-                    <main className="max-w-4xl mx-auto px-4 py-8">
-                        {step === 1 ? renderBuildStep() : renderResultStep()}
-                    </main>
-                </div>
-            );
-        };
-
-        const root = ReactDOM.createRoot(document.getElementById('root'));
-        root.render(<App />);
-    </script>
-</body>
+      <script type="module" src="/index.tsx"></script>
+  </body>
 </html>
